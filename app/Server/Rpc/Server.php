@@ -5,7 +5,9 @@ namespace App\Server\Rpc;
 
 
 use App\Library\OrderServiceImpl;
+use App\Library\UserServiceImpl;
 use Rpc\server\OrderServiceProcessor;
+use Rpc\server\UserServiceProcessor;
 use SwooleThrift\TSwooleServer;
 use SwooleThrift\TSwooleServerTransport;
 use Thrift\Exception\TException;
@@ -26,6 +28,10 @@ class Server
             $orderImpl = new OrderServiceImpl();
             $orderService = new OrderServiceProcessor($orderImpl);
             $processor->registerProcessor("OrderServiceIf", $orderService);
+
+            $userImpl = new UserServiceImpl();
+            $userService = new UserServiceProcessor($userImpl);
+            $processor->registerProcessor("UserServiceIf", $userService);
 
             $setting = [
                 'daemonize' => false,

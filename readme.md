@@ -64,9 +64,9 @@ service OrderService{
 - thrift编译rpc目录下所有.thrift后缀文件
 ````
 cd rpc
-thrift --gen php:service service/test.thrift
+thrift --gen php:server server/User.thrift
 #注： 上边命令是基于当前目录生成的，如果想自定义可以执行如下命令
-thrift -r -out ./xxxx/xxx --gen php:service service/test.thrift
+thrift -r -out ./xxxx/xxx --gen php:server server/User.thrift
 ````
 - 在app/Library中创建OrderServiceImpl.php文件，实现order.thrift中逻辑，实际需要实现依据order.thrift编译生成的\Rpc\server\OrderServiceIf接口
 ````
@@ -166,35 +166,49 @@ class Server
 <?php
 //路径为app/Server/Rpc/Client.php
 namespace App\Server\Rpc;
-use Rpc\server\OrderServiceClient;
 use Thrift\Exception\TTransportException;
 use Thrift\Protocol\TMultiplexedProtocol;
 class Client
 {
     private static $transport;
-    public function client()
-    {
-        $host = "192.168.10.10";  // 服务端对外IP地址
-        $port = 9999;            // 服务端对外端口
-        try{
-            $socket = new \Thrift\Transport\TSocket($host, $port);
-            $socket->setRecvTimeout(3000);
-            $socket->setDebug(true);
-            self::$transport = new \Thrift\Transport\TFramedTransport($socket, 1024, 1024);
-            $protocol = new \Thrift\Protocol\TBinaryProtocol(self::$transport, false, true);
-            self::$transport->open();
-            app('log')->error('客户端-连接成功 ', ['host' => sprintf("%s:%d", $host, $port), 'methodName' => __METHOD__]);
-            $thriftProtocol = new TMultiplexedProtocol($protocol, "OrderServiceIf");// 注意：OrderServiceIf -- servername需和服务端一致
-            $client = new OrderServiceClient($thriftProtocol);
-            $client->add(json_encode(["add",1,3,4]));
-            $client->index(json_encode(["index",1,3,4]));
-            $client->update(json_encode(["update",1,3,4]));
-        }catch (TTransportException $te){
-            app('log')->error('客户端-连接失败 ', ['host' => sprintf("%s:%d", $host, $port), 'methodName' => __METHOD__, 'content' => $te->getMessage()]);
-        }catch (\Exception $e){
-            app('log')->error('客户端-连接失败 ', ['host' => sprintf("%s:%d", $host, $port), 'methodName' => __METHOD__, 'content' => $e->getMessage()]);
+    private static $protocol;
+    private function boot(){
+        if (empty(self::$transport)){
+            $host = "192.168.10.10";
+            $port = 9999;
+            try{
+                $socket = new \Thrift\Transport\TSocket($host, $port);
+                $socket->setRecvTimeout(3000);
+                $socket->setDebug(true);
+                self::$transport = new \Thrift\Transport\TFramedTransport($socket, 1024, 1024);
+                self::$protocol = new \Thrift\Protocol\TBinaryProtocol(self::$transport, false, true);
+                self::$transport->open();
+            }catch (TTransportException $te){
+                app('log')->error('客户端-连接失败 ', ['host' => sprintf("%s:%d", $host, $port), 'methodName' => __METHOD__, 'content' => $te->getMessage()]);
+            }catch (\Exception $e){
+                app('log')->error('客户端-连接失败 ', ['host' => sprintf("%s:%d", $host, $port), 'methodName' => __METHOD__, 'content' => $e->getMessage()]);
+            }
         }
+        return self::$transport;
     }
+
+    /**
+     * @param $service
+     * @return mixed
+     * @throws \ReflectionException
+     */
+    public function client($service)
+    {
+        // 初始化 客户端rpc连接
+        $this->boot();
+        $reflex = new \ReflectionClass($service);
+        $reflexName = $reflex->getName();
+        $serviceName = $reflex->getShortName();
+        $className = substr($reflexName, 0, -2) . "Client";
+        $thriftProtocol = new TMultiplexedProtocol(self::$protocol,$serviceName );
+        return new $className($thriftProtocol);
+    }
+    private function __clone(){}
     public function __destruct()
     {
         self::$transport->close();
@@ -266,8 +280,11 @@ use Rpc\server\Test;
 class TestController extends Controller
 {
     public function index(){
-        (new Client())->client();
-        return Test::t();
+        $client = new Client();
+        $order = $client->client(OrderServiceIf::class);
+        print_r($order->add(json_encode(["add",1,3,4])));
+        print_r($order->index(json_encode(["index",1,3,4])));
+        print_r($order->update(json_encode(["update",1,3,4])));
     }
 }
 ````

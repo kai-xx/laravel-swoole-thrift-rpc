@@ -16,3 +16,4 @@ Route::get('/', function () {
 });
 
 Route::get('/test/index', 'TestController@index');
+Route::get('/test/user', 'TestController@user');
