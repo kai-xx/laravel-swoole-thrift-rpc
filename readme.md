@@ -309,5 +309,5 @@ php -S xx.xx.xx.xx:xxxx
 [2019-07-23 21:21:32] local.INFO: method为App\Library\OrderServiceImpl::update,数据为： ["update",1,3,4] 
 ````
 
-####注意事项：
-    新增脚本之后记得，composer dumpaotuupload
+####    注意事项：
+    新增脚本之后记得，composer dumpautoload
