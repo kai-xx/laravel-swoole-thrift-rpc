@@ -310,4 +310,7 @@ php -S xx.xx.xx.xx:xxxx
 ````
 
 ####    注意事项：
-    新增脚本之后记得，composer dumpautoload
+    1.  克隆项目之后记得composer install
+    2.  新增rpc脚本后
+        - 方法一： cd rpc && thrift --gen php:server server/User.thrift,然后再项目根目录下执行composer dumpautoload
+        - 方法二： composer.json中已经加入处理脚本，直接执行 composer update 即可
