@@ -13,20 +13,20 @@
         [php-thrift-swoole](https://packagist.org/packages/panus/php-thrift-swoole)
 
 - 项目地址
-````
+````shell script
 https://github.com/kai-xx/laravel-swoole-thrift-rpc.git
 ````
 - 安装环境 
-````
+````shell script
 1 Thrift
 2 swoole
 ````
 - 使用composer创建Laravel项目
-````
+````shell script
 composer create-project --prefer-dist laravel/laravel blog
 ````
 - 安装依赖包
-````
+````shell script
 composer require panus/php-thrift-swoole
 ````
 - 创建RPC目录
@@ -62,14 +62,14 @@ service OrderService{
 }
 ````
 - thrift编译rpc目录下所有.thrift后缀文件
-````
+````shell script
 cd rpc
 thrift --gen php:server server/User.thrift
 #注： 上边命令是基于当前目录生成的，如果想自定义可以执行如下命令
 thrift -r -out ./xxxx/xxx --gen php:server server/User.thrift
 ````
 - 在app/Library中创建OrderServiceImpl.php文件，实现order.thrift中逻辑，实际需要实现依据order.thrift编译生成的\Rpc\server\OrderServiceIf接口
-````
+```php
 <?php
 //路径为app/Library/OrderServiceImpl.php
 namespace App\Library;
@@ -110,8 +110,25 @@ class OrderServiceImpl implements OrderServiceIf
     }
 }
 ````
+- 在app/Library/Kernel.php中加入OrderServiceImpl对象
+```php
+<?php
+namespace App\Library;
+class Kernel
+{
+    private $impl = [
+        \App\Library\OrderServiceImpl::class,
+        \App\Library\UserServiceImpl::class
+    ];
+    public function getImpl(){
+        return $this->impl;
+    }
+}
+```
+
+
 - 创建RPC服务，Server.php
-````
+```php
 <?php
 //路径为app/Server/Rpc/Server.php
 namespace App\Server\Rpc;
@@ -123,6 +140,7 @@ use Thrift\Exception\TException;
 use Thrift\Factory\TBinaryProtocolFactory;
 use Thrift\Factory\TTransportFactory;
 use Thrift\TMultiplexedProcessor;
+use App\Library\Kernel;
 class Server
 {
     /**
@@ -136,9 +154,15 @@ class Server
             $bThrift = new TBinaryProtocolFactory();
             $processor = new TMultiplexedProcessor();
             // -------------------服务注册--------------------------//
-            $orderImpl = new OrderServiceImpl(); // 实例化order类
-            $orderService = new OrderServiceProcessor($orderImpl);
-            $processor->registerProcessor("OrderServiceIf", $orderService); // 注意：OrderServiceIf -- servername需和客户端一致
+            foreach ($kernel->getImpl() as $value){
+                $reflexImpl = new \ReflectionClass($value);
+                $impl = $reflexImpl->newInstance();
+                $reflexName = $reflexImpl->getShortName();
+                $str = substr($reflexName, 0, -4);
+                $reflexService = new \ReflectionClass("\Rpc\server\\" . $str . "Processor");
+                $service = $reflexService->newInstanceArgs([$impl]);
+                $processor->registerProcessor($str . "If", $service); // 注意：OrderServiceIf -- servername需和客户端一致
+            }
             // -------------------服务注册--------------------------//
             $setting = [
                 'daemonize' => false,
@@ -162,7 +186,7 @@ class Server
 }
 ````
 - 创建客户端，Client.php
-````
+````php
 <?php
 //路径为app/Server/Rpc/Client.php
 namespace App\Server\Rpc;
@@ -216,7 +240,7 @@ class Client
 }
 ````
 - 创建rpc命令行文件，可使用 php artisan make:command RpcServer 创建
-````
+````php
 <?php
 //路径为app/Console/Commands/RpcServer.php
 namespace App\Console\Commands;
@@ -262,14 +286,14 @@ class RpcServer extends Command
 }
 ````
 - 注册rpc到php artisan 
-````
+````php
 protected $commands = [
     //
     RpcServer::class
 ];
 ````
 - 创建可执行controller，TestController.php
-````
+```php
 <?php
 //路径为app/Http/Controllers/TestController.php
 namespace App\Http\Controllers;
@@ -289,7 +313,7 @@ class TestController extends Controller
 }
 ````
 - 在routes/web.php添加路由
-````
+````php
 Route::get('/test/index', 'TestController@index');
 ````
 - 在窗口A中，项目根目录下执行如下命令，保持窗口开启状态
@@ -301,7 +325,7 @@ php artisan server:rpc
 php -S xx.xx.xx.xx:xxxx
 ````
 - 请求路由，观察log日志，出现如下信息表示服务搭建成功
-````
+````shell script
 [2019-07-23 21:21:27] local.INFO: 服务连接成功  {"host":"192.168.10.10:9999","methodName":"App\\Server\\Rpc\\Server::server"} 
 [2019-07-23 21:21:32] local.ERROR: 客户端-连接成功  {"host":"192.168.10.10:9999","methodName":"App\\Server\\Rpc\\Client::client"} 
 [2019-07-23 21:21:32] local.INFO: method为App\Library\OrderServiceImpl::add,数据为： ["add",1,3,4] 

@@ -4,10 +4,7 @@
 namespace App\Server\Rpc;
 
 
-use App\Library\OrderServiceImpl;
-use App\Library\UserServiceImpl;
-use Rpc\server\OrderServiceProcessor;
-use Rpc\server\UserServiceProcessor;
+use App\Library\Kernel;
 use SwooleThrift\TSwooleServer;
 use SwooleThrift\TSwooleServerTransport;
 use Thrift\Exception\TException;
@@ -24,15 +21,16 @@ class Server
             $tThrift = new TTransportFactory();
             $bThrift = new TBinaryProtocolFactory();
             $processor = new TMultiplexedProcessor();
-
-            $orderImpl = new OrderServiceImpl();
-            $orderService = new OrderServiceProcessor($orderImpl);
-            $processor->registerProcessor("OrderServiceIf", $orderService);
-
-            $userImpl = new UserServiceImpl();
-            $userService = new UserServiceProcessor($userImpl);
-            $processor->registerProcessor("UserServiceIf", $userService);
-
+            $kernel = new Kernel();
+            foreach ($kernel->getImpl() as $value){
+                $reflexImpl = new \ReflectionClass($value);
+                $impl = $reflexImpl->newInstance();
+                $reflexName = $reflexImpl->getShortName();
+                $str = substr($reflexName, 0, -4);
+                $reflexService = new \ReflectionClass("\Rpc\server\\" . $str . "Processor");
+                $service = $reflexService->newInstanceArgs([$impl]);
+                $processor->registerProcessor($str . "If", $service);
+            }
             $setting = [
                 'daemonize' => false,
                 'worker_num' => 2,
